@@ -1,25 +1,53 @@
-import React, { Component } from "react";
-import logo from "./logo.svg";
-import "./App.css";
+import React, { Component } from 'react';
+import Editor from './Editor';
+import logo from './logo.svg';
+import './App.css';
+
+const defaultQuery = `fragment FullType on __Type {
+  kind name description
+  fields(includeDeprecated: true) {
+    name description
+    args { ...InputValue }
+    type { ...TypeRef }
+    isDeprecated deprecationReason
+  }
+  inputFields { ...InputValue }
+  interfaces { ...TypeRef }
+  enumValues(includeDeprecated: true) {
+    name description
+    isDeprecated deprecationReason
+  }
+  possibleTypes { ...TypeRef }
+}
+fragment InputValue on __InputValue {
+  name description
+  type { ...TypeRef }
+  defaultValue
+}
+fragment TypeRef on __Type {
+  kind name ofType {
+    kind name ofType {
+      kind name ofType {
+        kind name ofType {
+          kind name ofType {
+            kind name ofType {
+              kind name ofType {
+                kind name
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+`;
 
 class App extends Component {
   render() {
     return (
       <div className="App">
-        <header className="App-header">
-          <img src={logo} className="App-logo" alt="logo" />
-          <p>
-            Edit <code>src/App.tsx</code> and save to reload.
-          </p>
-          <a
-            className="App-link"
-            href="https://reactjs.org"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Learn React
-          </a>
-        </header>
+        <Editor height="100vh" defaultValue={defaultQuery} />
       </div>
     );
   }
