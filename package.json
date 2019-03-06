@@ -1,6 +1,6 @@
 {
-  "name": "tsgraphiql",
-  "version": "0.1.0",
+  "name": "graphiql-monaco",
+  "version": "0.0.0",
   "private": true,
   "dependencies": {
     "@types/graphql": "^14.0.7",
