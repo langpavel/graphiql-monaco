@@ -1,6 +1,5 @@
 import React, { Component } from 'react';
 import Editor from './Editor';
-import logo from './logo.svg';
 import './App.css';
 
 const defaultQuery = `fragment FullType on __Type {
