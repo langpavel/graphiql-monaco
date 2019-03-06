@@ -1,5 +1,5 @@
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
-import 'monaco-editor/esm/vs/platform/commands/common/commands';
+// import 'monaco-editor/esm/vs/platform/commands/common/commands';
 import 'monaco-editor/esm/vs/basic-languages/graphql/graphql';
 import 'monaco-editor/esm/vs/basic-languages/graphql/graphql.contribution';
 import * as React from 'react';
@@ -9,6 +9,23 @@ function noop() {}
 function processSize(size: string): string {
   return !/^\d+$/.test(size) ? size : `${size}px`;
 }
+
+class HoverProvider implements monaco.languages.HoverProvider {
+  provideHover(
+    model: monaco.editor.ITextModel,
+    position: monaco.Position,
+    token: monaco.CancellationToken,
+  ): monaco.languages.ProviderResult<monaco.languages.Hover> {
+    return {
+      contents: [
+        { value: '### Hover Content' },
+        { value: `\`${position.toString()}\`` },
+      ],
+    };
+  }
+}
+
+monaco.languages.registerHoverProvider('graphql', new HoverProvider());
 
 type EditorProps = {
   width: string;

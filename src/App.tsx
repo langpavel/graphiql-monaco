@@ -1,6 +1,5 @@
 import React, { Component } from 'react';
 import Editor from './Editor';
-import logo from './logo.svg';
 import './App.css';
 
 const defaultQuery = `fragment FullType on __Type {
@@ -47,7 +46,7 @@ class App extends Component {
   render() {
     return (
       <div className="App">
-        <Editor height="100vh" defaultValue={defaultQuery} />
+        <Editor width="100%" height="100%" defaultValue={defaultQuery} />
       </div>
     );
   }
