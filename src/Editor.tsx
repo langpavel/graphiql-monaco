@@ -119,11 +119,61 @@ export default class Editor extends React.Component<EditorProps> {
         value,
         language,
         selectOnLineNumbers: true,
+        automaticLayout: true,
         ...options,
       });
       if (theme) {
         monaco.editor.setTheme(theme);
       }
+
+      this.editor.addAction({
+        // An unique identifier of the contributed action.
+        id: 'graphql-execute',
+
+        // A label of the action that will be presented to the user.
+        label: 'Execute GraphQL',
+
+        // An optional array of keybindings for the action.
+        keybindings: [
+          monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
+          // chord
+          // monaco.KeyMod.chord(
+          //   monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_G,
+          //   monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_E,
+          // ),
+        ],
+
+        // A precondition for this action.
+        // precondition: null,
+
+        // A rule to evaluate on top of the precondition in order to dispatch the keybindings.
+        // keybindingContext: null,
+
+        /**
+         * Control if the action should show up in the context menu and where.
+         * The context menu of the editor has these default:
+         * - navigation - The navigation group comes first in all cases.
+         * - 1_modification - This group comes next and contains commands that modify your code.
+         * - 9_cutcopypaste - The last default group with the basic editing commands.
+         * You can also create your own group. Defaults to null (don't show in context menu).
+         */
+        contextMenuGroupId: 'navigation',
+
+        contextMenuOrder: 0,
+
+        // Method that will be executed when the action is triggered.
+        // @param editor The editor instance is passed in as a convinience
+        run: function(ed) {
+          const position = ed.getPosition();
+          const model = ed.getModel();
+          if (model) {
+            const text = model.getValue();
+            alert(text);
+            console.log('Executing query', position, text);
+          }
+        },
+      });
+
       // After initializing monaco editor
       this.editorDidMount(this.editor);
     }
