@@ -1,0 +1,62 @@
+import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
+import 'monaco-editor/esm/vs/platform/commands/common/commands';
+import './completion';
+import './hover';
+
+monaco.editor.setTheme('vs-dark');
+monaco.languages.register({ id: 'graphiql' });
+
+abstract class State implements monaco.languages.IState {
+  clone(): this {
+    return this;
+  }
+  equals(other: monaco.languages.IState): boolean {
+    return this === other;
+  }
+  abstract tokenize(line: string): monaco.languages.ILineTokens;
+}
+
+class InitialState extends State {
+  tokenize(line: string): monaco.languages.ILineTokens {}
+}
+
+class TokensProvider {
+  /**
+   * The initial state of a language. Will be the state passed in to tokenize the first line.
+   */
+  getInitialState(): State {
+    return new State();
+  }
+  /**
+   * Tokenize a line given the state at the beginning of the line.
+   */
+  tokenize(line: string, state: State): monaco.languages.ILineTokens {
+    return {
+      tokens: [
+        {
+          startIndex: 0,
+          scopes: 'string',
+        },
+        {
+          startIndex: 2,
+          scopes: 'comment',
+        },
+        {
+          startIndex: 4,
+          scopes: 'keyword',
+        },
+        {
+          startIndex: 6,
+          scopes: 'operator',
+        },
+        {
+          startIndex: 8,
+          scopes: 'number',
+        },
+      ],
+      endState: new State(),
+    };
+  }
+}
+
+monaco.languages.setTokensProvider('graphiql', new TokensProvider());

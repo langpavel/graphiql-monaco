@@ -16,5 +16,10 @@
     "jsx": "preserve"
   },
   "include": ["src"],
-  "exclude": ["src/setupProxy.js", "src/setupProxy.test.ts"]
+  "exclude": [
+    "src/setupProxy.js",
+    "src/setupProxy.test.ts",
+    "src/monaco-gql/codemirror-graphql",
+    "src/monaco-gql/graphql-language-service/server"
+  ]
 }

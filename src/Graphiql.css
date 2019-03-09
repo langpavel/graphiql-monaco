@@ -1,0 +1,23 @@
+.Graphiql {
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.Graphiql-main {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: row;
+}
+
+.Graphiql-editor {
+  min-width: 400px;
+  flex-grow: 1;
+}
+
+.Graphiql-results {
+  min-width: 200px;
+}
