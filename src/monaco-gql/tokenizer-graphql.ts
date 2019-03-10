@@ -65,7 +65,7 @@ class TokensProvider {
         scopes,
       });
     }
-    console.log(line, tokens.map((x) => x.scopes));
+    // console.log(line, tokens.map((x) => x.scopes));
     return {
       tokens,
       endState: state,

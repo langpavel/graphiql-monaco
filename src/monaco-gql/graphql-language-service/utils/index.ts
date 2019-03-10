@@ -8,6 +8,6 @@
 
 export { getASTNodeAtPosition, pointToOffset } from './getASTNodeAtPosition';
 
-export { Position, Range, locToRange, offsetToPosition } from './Range';
+export { locToRange, offsetToPosition } from './Range';
 
 export { validateWithCustomRules } from './validateWithCustomRules';

@@ -1,4 +1,6 @@
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
+import { getHoverInformation } from './graphql-language-service/interface';
+import getCurrentSchema from './getCurrentSchema';
 
 // Like https://github.com/graphql/codemirror-graphql/blob/master/src/info.js
 
@@ -8,12 +10,9 @@ class HoverProvider implements monaco.languages.HoverProvider {
     position: monaco.Position,
     token: monaco.CancellationToken,
   ): monaco.languages.ProviderResult<monaco.languages.Hover> {
-    return {
-      contents: [
-        { value: '### Hover Content' },
-        { value: `\`${position.toString()}\`` },
-      ],
-    };
+    const schema = getCurrentSchema();
+    const queryText = model.getValue();
+    return getHoverInformation(schema, queryText, position);
   }
 }
 

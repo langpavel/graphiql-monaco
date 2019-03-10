@@ -8,7 +8,7 @@
 
 import fs from 'fs';
 import { buildSchema, GraphQLSchema } from 'graphql';
-import { Position } from '../../utils';
+import * as monaco from 'monaco-editor';
 import path from 'path';
 
 import { getHoverInformation } from '../getHoverInformation';

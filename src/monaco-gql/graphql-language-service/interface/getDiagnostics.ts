@@ -17,10 +17,11 @@ import {
   findDeprecatedUsages,
   parse,
 } from 'graphql';
+import * as monaco from 'monaco-editor';
 import { Diagnostic, CustomValidationRule } from '../types';
 
 import { CharacterStream, onlineParser } from '../parser';
-import { Position, Range, validateWithCustomRules } from '../utils';
+import { validateWithCustomRules } from '../utils';
 
 export const SEVERITY = {
   ERROR: 1,
@@ -90,7 +91,7 @@ function annotations(
   error: GraphQLError,
   severity: number,
   type: string,
-): Array<Diagnostic> {
+): Diagnostic[] {
   if (!error.nodes) {
     return [];
   }
@@ -110,9 +111,13 @@ function annotations(
       source: `GraphQL: ${type}`,
       message: error.message,
       severity,
-      range: new Range(
-        new Position(loc.line - 1, loc.column - 1),
-        new Position(loc.line - 1, end),
+      range: new monaco.Range(
+        // new Position(loc.line - 1, loc.column - 1),
+        // new Position(loc.line - 1, end),
+        loc.line,
+        loc.column,
+        loc.line,
+        end,
       ),
     };
   });

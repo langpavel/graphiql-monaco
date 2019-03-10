@@ -88,9 +88,10 @@ export function objectValues(object: Object): Array<any> {
 // Create the expected hint response given a possible list and a token
 export function hintList(
   token: ContextToken,
-  list: Array<CompletionItem>,
-): Array<CompletionItem> {
-  return filterAndSortList(list, normalizeText(token.string));
+  list: CompletionItem[],
+): CompletionItem[] {
+  return list;
+  // return filterAndSortList(list, normalizeText(token.string));
 }
 
 // Given a list of hint entries and currently typed text, sort and filter to

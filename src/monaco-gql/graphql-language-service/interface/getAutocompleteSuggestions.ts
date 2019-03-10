@@ -4,17 +4,17 @@
  *
  *  This source code is licensed under the license found in the
  *  LICENSE file in the root directory of this source tree.
- *
- *  @flow
  */
 
 import {
   FragmentDefinitionNode,
   GraphQLDirective,
   GraphQLSchema,
+  GraphQLArgs,
+  GraphQLType,
 } from 'graphql';
+import * as monaco from 'monaco-editor';
 import { CompletionItem, ContextToken, State, TypeInfo } from '../types';
-import { Position } from '../utils';
 
 import {
   GraphQLBoolean,
@@ -41,6 +41,17 @@ import {
   objectValues,
 } from './autocompleteUtils';
 
+function calcRange(cursor: monaco.Position, token: ContextToken): monaco.Range {
+  const isWhitespace = token.style === 'ws';
+
+  return new monaco.Range(
+    cursor.lineNumber,
+    isWhitespace ? cursor.column : token.start + 1,
+    cursor.lineNumber,
+    isWhitespace ? cursor.column : token.end + 1,
+  );
+}
+
 /**
  * Given GraphQLSchema, queryText, and context of the current position within
  * the source text, provide a list of typeahead entries.
@@ -48,18 +59,20 @@ import {
 export function getAutocompleteSuggestions(
   schema: GraphQLSchema,
   queryText: string,
-  cursor: Position,
-  contextToken?: ContextToken,
-): Array<CompletionItem> {
-  const token = contextToken || getTokenAtPosition(queryText, cursor);
+  cursor: monaco.Position,
+  context: monaco.languages.CompletionContext,
+): null | CompletionItem[] {
+  const token = getTokenAtPosition(queryText, cursor, true);
+  // console.log(
+  //   `getTokenAtPosition at ${cursor} result:`,
+  //   JSON.parse(JSON.stringify(token)),
+  // );
 
   const state =
     token.state.kind === 'Invalid' ? token.state.prevState : token.state;
 
   // relieve flow errors by checking if `state` exists
-  if (!state) {
-    return [];
-  }
+  if (!state) return null;
 
   const kind = state.kind;
   const step = state.step;
@@ -68,17 +81,52 @@ export function getAutocompleteSuggestions(
   // Definition kinds
   if (kind === 'Document') {
     return hintList(token, [
-      { label: 'query' },
-      { label: 'mutation' },
-      { label: 'subscription' },
-      { label: 'fragment' },
-      { label: '{' },
+      {
+        label: 'query',
+        kind: monaco.languages.CompletionItemKind.Keyword,
+        insertText: 'query ${1:Query} {\n\t$0\n}',
+        insertTextRules:
+          monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        range: calcRange(cursor, token),
+      },
+      {
+        label: 'mutation',
+        insertText: 'mutation ${1:Mutation} {\n\t$0\n}',
+        insertTextRules:
+          monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        kind: monaco.languages.CompletionItemKind.Keyword,
+        range: calcRange(cursor, token),
+      },
+      {
+        label: 'subscription',
+        insertText: 'subscription ${1:Subscription} {\n\t$0\n}',
+        insertTextRules:
+          monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        kind: monaco.languages.CompletionItemKind.Keyword,
+        range: calcRange(cursor, token),
+      },
+      {
+        label: 'fragment',
+        insertText: 'fragment ${1:Fragment} on ${2:Type} {\n\t$0\n}',
+        insertTextRules:
+          monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        kind: monaco.languages.CompletionItemKind.Keyword,
+        range: calcRange(cursor, token),
+      },
+      {
+        label: '{  }',
+        insertText: '{ $0 }',
+        insertTextRules:
+          monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        kind: monaco.languages.CompletionItemKind.Text,
+        range: calcRange(cursor, token),
+      },
     ]);
   }
 
   // Field names
   if (kind === 'SelectionSet' || kind === 'Field' || kind === 'AliasedField') {
-    return getSuggestionsForFieldNames(token, typeInfo, schema);
+    return getSuggestionsForFieldNames(token, typeInfo, schema, cursor);
   }
 
   // Argument names
@@ -89,8 +137,14 @@ export function getAutocompleteSuggestions(
         token,
         argDefs.map((argDef) => ({
           label: argDef.name,
+          insertText: argDef.name,
+          kind: monaco.languages.CompletionItemKind.Property,
           detail: String(argDef.type),
-          documentation: argDef.description,
+          documentation:
+            typeof argDef.description === 'string'
+              ? { value: argDef.description }
+              : undefined,
+          range: calcRange(cursor, token),
         })),
       );
     }
@@ -104,8 +158,14 @@ export function getAutocompleteSuggestions(
         token,
         objectFields.map((field) => ({
           label: field.name,
+          insertText: field.name,
+          kind: monaco.languages.CompletionItemKind.Property,
           detail: String(field.type),
-          documentation: field.description,
+          documentation:
+            typeof field.description === 'string'
+              ? { value: field.description }
+              : undefined,
+          range: calcRange(cursor, token),
         })),
       );
     }
@@ -118,7 +178,7 @@ export function getAutocompleteSuggestions(
     (kind === 'ObjectField' && step === 2) ||
     (kind === 'Argument' && step === 2)
   ) {
-    return getSuggestionsForInputValues(token, typeInfo);
+    return getSuggestionsForInputValues(token, typeInfo, cursor);
   }
 
   // Fragment type conditions
@@ -128,12 +188,23 @@ export function getAutocompleteSuggestions(
       state.prevState != null &&
       state.prevState.kind === 'TypeCondition')
   ) {
-    return getSuggestionsForFragmentTypeConditions(token, typeInfo, schema);
+    return getSuggestionsForFragmentTypeConditions(
+      token,
+      typeInfo,
+      schema,
+      cursor,
+    );
   }
 
   // Fragment spread names
   if (kind === 'FragmentSpread' && step === 1) {
-    return getSuggestionsForFragmentSpread(token, typeInfo, schema, queryText);
+    return getSuggestionsForFragmentSpread(
+      token,
+      typeInfo,
+      schema,
+      queryText,
+      cursor,
+    );
   }
 
   // Variable definition types
@@ -145,12 +216,12 @@ export function getAutocompleteSuggestions(
       (state.prevState.kind === 'VariableDefinition' ||
         state.prevState.kind === 'ListType'))
   ) {
-    return getSuggestionsForVariableDefinition(token, schema);
+    return getSuggestionsForVariableDefinition(token, schema, cursor);
   }
 
   // Directive names
   if (kind === 'Directive') {
-    return getSuggestionsForDirective(token, state, schema);
+    return getSuggestionsForDirective(token, state, schema, cursor);
   }
 
   return [];
@@ -161,6 +232,7 @@ function getSuggestionsForFieldNames(
   token: ContextToken,
   typeInfo: TypeInfo,
   schema: GraphQLSchema,
+  cursor: monaco.Position,
 ): Array<CompletionItem> {
   if (typeInfo.parentType) {
     const parentType = typeInfo.parentType;
@@ -178,10 +250,13 @@ function getSuggestionsForFieldNames(
       token,
       fields.map((field) => ({
         label: field.name,
+        insertText: field.name,
+        kind: monaco.languages.CompletionItemKind.Method,
         detail: String(field.type),
         documentation: field.description,
         isDeprecated: field.isDeprecated,
         deprecationReason: field.deprecationReason,
+        range: calcRange(cursor, token),
       })),
     );
   }
@@ -191,6 +266,7 @@ function getSuggestionsForFieldNames(
 function getSuggestionsForInputValues(
   token: ContextToken,
   typeInfo: TypeInfo,
+  cursor: monaco.Position,
 ): Array<CompletionItem> {
   const namedInputType = getNamedType(typeInfo.inputType);
   if (namedInputType instanceof GraphQLEnumType) {
@@ -199,23 +275,33 @@ function getSuggestionsForInputValues(
       token,
       values.map((value) => ({
         label: value.name,
+        insertText: value.name,
+        kind: monaco.languages.CompletionItemKind.EnumMember,
         detail: String(namedInputType),
-        documentation: value.description,
+        documentation:
+          typeof value.description === 'string'
+            ? { value: value.description }
+            : undefined,
         isDeprecated: value.isDeprecated,
         deprecationReason: value.deprecationReason,
+        range: calcRange(cursor, token),
       })),
     );
   } else if (namedInputType === GraphQLBoolean) {
     return hintList(token, [
       {
         label: 'true',
+        insertText: 'true',
+        kind: monaco.languages.CompletionItemKind.Keyword,
         detail: String(GraphQLBoolean),
-        documentation: 'Not false.',
+        range: calcRange(cursor, token),
       },
       {
         label: 'false',
+        insertText: 'false',
+        kind: monaco.languages.CompletionItemKind.Keyword,
         detail: String(GraphQLBoolean),
-        documentation: 'Not true.',
+        range: calcRange(cursor, token),
       },
     ]);
   }
@@ -227,8 +313,9 @@ function getSuggestionsForFragmentTypeConditions(
   token: ContextToken,
   typeInfo: TypeInfo,
   schema: GraphQLSchema,
+  cursor: monaco.Position,
 ): Array<CompletionItem> {
-  let possibleTypes;
+  let possibleTypes: any[];
   if (typeInfo.parentType) {
     if (isAbstractType(typeInfo.parentType)) {
       const abstractType = assertAbstractType(typeInfo.parentType);
@@ -254,10 +341,15 @@ function getSuggestionsForFragmentTypeConditions(
   return hintList(
     token,
     possibleTypes.map((type) => {
-      const namedType = getNamedType(type);
+      const namedType: GraphQLType | undefined = getNamedType(type);
+      const desc = namedType && (namedType as any).description;
+      const documentation = desc ? { value: desc } : undefined;
       return {
         label: String(type),
-        documentation: (namedType && namedType.description) || '',
+        insertText: String(type),
+        documentation,
+        kind: monaco.languages.CompletionItemKind.Class,
+        range: calcRange(cursor, token),
       };
     }),
   );
@@ -268,6 +360,7 @@ function getSuggestionsForFragmentSpread(
   typeInfo: TypeInfo,
   schema: GraphQLSchema,
   queryText: string,
+  cursor: monaco.Position,
 ): Array<CompletionItem> {
   const typeMap = schema.getTypeMap();
   const defState = getDefinitionState(token.state);
@@ -298,18 +391,21 @@ function getSuggestionsForFragmentSpread(
     token,
     relevantFrags.map((frag) => ({
       label: frag.name.value,
+      insertText: frag.name.value,
+      kind: monaco.languages.CompletionItemKind.Field,
       detail: String(typeMap[frag.typeCondition.name.value]),
-      documentation: `fragment ${frag.name.value} on ${
-        frag.typeCondition.name.value
-      }`,
+      documentation: {
+        value: `*fragment* \`${frag.name.value}\` *on* \`${
+          frag.typeCondition.name.value
+        }\``,
+      },
+      range: calcRange(cursor, token),
     })),
   );
 }
 
-function getFragmentDefinitions(
-  queryText: string,
-): Array<FragmentDefinitionNode> {
-  const fragmentDefs = [];
+function getFragmentDefinitions(queryText: string): FragmentDefinitionNode[] {
+  const fragmentDefs: FragmentDefinitionNode[] = [];
   runOnlineParser(queryText, (_, state) => {
     if (state.kind === 'FragmentDefinition' && state.name && state.type) {
       fragmentDefs.push({
@@ -339,14 +435,18 @@ function getFragmentDefinitions(
 function getSuggestionsForVariableDefinition(
   token: ContextToken,
   schema: GraphQLSchema,
-): Array<CompletionItem> {
+  cursor: monaco.Position,
+): CompletionItem[] {
   const inputTypeMap = schema.getTypeMap();
   const inputTypes = objectValues(inputTypeMap).filter(isInputType);
   return hintList(
     token,
     inputTypes.map((type) => ({
       label: type.name,
+      insertText: type.name,
+      kind: monaco.languages.CompletionItemKind.Variable,
       documentation: type.description,
+      range: calcRange(cursor, token),
     })),
   );
 }
@@ -355,6 +455,7 @@ function getSuggestionsForDirective(
   token: ContextToken,
   state: State,
   schema: GraphQLSchema,
+  cursor: monaco.Position,
 ): Array<CompletionItem> {
   if (state.prevState && state.prevState.kind) {
     const directives = schema
@@ -364,7 +465,10 @@ function getSuggestionsForDirective(
       token,
       directives.map((directive) => ({
         label: directive.name,
+        insertText: directive.name,
+        kind: monaco.languages.CompletionItemKind.Property,
         documentation: directive.description || '',
+        range: calcRange(cursor, token),
       })),
     );
   }
@@ -373,30 +477,50 @@ function getSuggestionsForDirective(
 
 export function getTokenAtPosition(
   queryText: string,
-  cursor: Position,
+  cursor: monaco.Position,
+  tokenBeforeCursor: boolean = false,
 ): ContextToken {
+  const lineIndex = cursor.lineNumber - 1;
   let styleAtCursor = null;
   let stateAtCursor = null;
   let stringAtCursor = null;
+  let position = 0;
+  let start = 0;
+  let end = 0;
+  let isBeforeCursor = false;
   const token = runOnlineParser(queryText, (stream, state, style, index) => {
-    if (index === cursor.line) {
-      if (stream.getCurrentPosition() >= cursor.character) {
-        styleAtCursor = style;
-        stateAtCursor = { ...state };
-        stringAtCursor = stream.current();
+    if (index === lineIndex) {
+      position = stream.getCurrentPosition();
+      if (tokenBeforeCursor && cursor.column === position && style === 'ws') {
+        isBeforeCursor = true;
         return 'BREAK';
       }
+      styleAtCursor = style;
+      stateAtCursor = state.clone();
+      stringAtCursor = stream.current();
+      start = end;
+      end = position;
+    }
+    if (index > lineIndex || (index === lineIndex && end >= cursor.column)) {
+      return 'BREAK';
     }
   });
+
+  console.log(
+    `${styleAtCursor} "${stringAtCursor}" ${
+      isBeforeCursor ? 'before cursor' : 'at cursor'
+    } (${cursor.column}) (${start}—${end})`,
+  );
 
   // Return the state/style of parsed token in case those at cursor aren't
   // available.
   return {
-    start: token.start,
-    end: token.end,
+    start: start,
+    end: end,
     string: stringAtCursor || token.string,
     state: stateAtCursor || token.state,
     style: styleAtCursor || token.style,
+    isBeforeCursor,
   };
 }
 
@@ -423,15 +547,20 @@ function runOnlineParser(
   let state = parser.startState();
   let style = '';
 
-  let stream: CharacterStream = new CharacterStream('');
-
+  let stream: CharacterStream | null = null;
   for (let i = 0; i < lines.length; i++) {
     stream = new CharacterStream(lines[i]);
     while (!stream.eol()) {
       style = parser.token(stream, state);
       const code = callback(stream, state, style, i);
       if (code === 'BREAK') {
-        break;
+        return {
+          start: stream.getStartOfToken(),
+          end: stream.getCurrentPosition(),
+          string: stream.current(),
+          state,
+          style,
+        };
       }
     }
 
@@ -445,16 +574,16 @@ function runOnlineParser(
   }
 
   return {
-    start: stream.getStartOfToken(),
-    end: stream.getCurrentPosition(),
-    string: stream.current(),
+    start: stream ? stream.getStartOfToken() : -1,
+    end: stream ? stream.getCurrentPosition() : -1,
+    string: stream ? stream.current() : '',
     state,
     style,
   };
 }
 
 function canUseDirective(
-  state: $PropertyType<State, 'prevState'>,
+  state: State['prevState'],
   directive: GraphQLDirective,
 ): boolean {
   if (!state || !state.kind) {

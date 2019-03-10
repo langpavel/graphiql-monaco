@@ -148,11 +148,11 @@ export interface GraphQLCache {
 }
 
 // online-parser related
-export interface Position {
-  line: number;
-  character: number;
-  lessThanOrEqualTo: (position: Position) => boolean;
-}
+// export interface Position {
+//   line: number;
+//   character: number;
+//   lessThanOrEqualTo: (position: Position) => boolean;
+// }
 
 export interface Range {
   start: Position;
@@ -230,6 +230,7 @@ export type ContextToken = {
   string: string;
   state: State;
   style: string;
+  isBeforeCursor: boolean;
 };
 
 export type TypeInfo = {
@@ -272,15 +273,16 @@ export type Diagnostic = {
   message: string;
 };
 
-export type CompletionItem = {
-  label: string;
-  kind?: number;
-  detail?: string;
-  documentation?: string;
-  // GraphQL Deprecation information
-  isDeprecated?: boolean;
-  deprecationReason?: string;
-};
+export type CompletionItem = monaco.languages.CompletionItem;
+// {
+//   label: string;
+//   kind?: number;
+//   detail?: string;
+//   documentation?: null | string;
+//   // GraphQL Deprecation information
+//   isDeprecated?: boolean;
+//   deprecationReason?: string;
+// };
 
 // Below are basically a copy-paste from Nuclide rpc types for definitions.
 

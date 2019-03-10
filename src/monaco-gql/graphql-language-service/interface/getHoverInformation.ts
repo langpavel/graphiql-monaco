@@ -11,80 +11,95 @@
  * https://github.com/graphql/codemirror-graphql/blob/master/src/info.js
  */
 
-import { GraphQLSchema } from 'graphql';
-import { ContextToken, HoverContents } from '../types';
-import { Position } from '../utils';
+import { GraphQLSchema, GraphQLType } from 'graphql';
+import * as monaco from 'monaco-editor';
+import { ContextToken, TypeInfo } from '../types';
 import { getTokenAtPosition, getTypeInfo } from './getAutocompleteSuggestions';
 import { GraphQLNonNull, GraphQLList } from 'graphql';
+
+type HoverOptions = {
+  schema: GraphQLSchema;
+};
 
 export function getHoverInformation(
   schema: GraphQLSchema,
   queryText: string,
-  cursor: Position,
+  cursor: monaco.Position,
   contextToken?: ContextToken,
-): HoverContents {
+): monaco.languages.Hover | null {
   const token = contextToken || getTokenAtPosition(queryText, cursor);
 
+  // console.log('schema, token, token.state', schema, token, token.state);
+
   if (!schema || !token || !token.state) {
-    return [];
+    return null;
   }
 
   const state = token.state;
   const kind = state.kind;
   const step = state.step;
-  const typeInfo = getTypeInfo(schema, token.state);
-  const options = { schema };
+  const typeInfo: TypeInfo = getTypeInfo(schema, token.state);
+  const options: HoverOptions = { schema };
 
   // Given a Schema and a Token, produce the contents of an info tooltip.
   // To do this, create a div element that we will render "into" and then pass
   // it to various rendering functions.
+  const into: string[] = [];
   if (
     (kind === 'Field' && step === 0 && typeInfo.fieldDef) ||
     (kind === 'AliasedField' && step === 2 && typeInfo.fieldDef)
   ) {
-    const into: string[] = [];
     renderField(into, typeInfo, options);
     renderDescription(into, options, typeInfo.fieldDef);
-    return into.join('').trim();
   } else if (kind === 'Directive' && step === 1 && typeInfo.directiveDef) {
-    const into = [];
+    const into: string[] = [];
     renderDirective(into, typeInfo, options);
     renderDescription(into, options, typeInfo.directiveDef);
-    return into.join('').trim();
   } else if (kind === 'Argument' && step === 0 && typeInfo.argDef) {
-    const into = [];
+    const into: string[] = [];
     renderArg(into, typeInfo, options);
     renderDescription(into, options, typeInfo.argDef);
-    return into.join('').trim();
   } else if (
     kind === 'EnumValue' &&
     typeInfo.enumValue &&
     typeInfo.enumValue.description
   ) {
-    const into = [];
+    const into: string[] = [];
     renderEnumValue(into, typeInfo, options);
     renderDescription(into, options, typeInfo.enumValue);
-    return into.join('').trim();
   } else if (
     kind === 'NamedType' &&
     typeInfo.type &&
-    typeInfo.type.description
+    (typeInfo.type as any).description
   ) {
-    const into = [];
+    const into: string[] = [];
     renderType(into, typeInfo, options, typeInfo.type);
     renderDescription(into, options, typeInfo.type);
-    return into.join('').trim();
+  } else {
+    return null;
   }
 
-  return [];
+  if (into.length) into.unshift('### ');
+
+  return {
+    contents: [{ value: into.join('').trim() }],
+  };
 }
 
-function renderField(into: string[], typeInfo, options) {
+function renderField(
+  into: string[],
+  typeInfo: TypeInfo,
+  options: HoverOptions,
+) {
   renderQualifiedField(into, typeInfo, options);
   renderTypeAnnotation(into, typeInfo, options, typeInfo.type);
 }
 
-function renderQualifiedField(into, typeInfo, options) {
+function renderQualifiedField(
+  into: string[],
+  typeInfo: TypeInfo,
+  options: HoverOptions,
+) {
   if (!typeInfo.fieldDef) {
     return;
   }
@@ -93,18 +108,22 @@ function renderQualifiedField(into, typeInfo, options) {
     renderType(into, typeInfo, options, typeInfo.parentType);
     text(into, '.');
   }
-  text(into, fieldName);
+  escape(into, fieldName);
 }
 
-function renderDirective(into, typeInfo, options) {
+function renderDirective(
+  into: string[],
+  typeInfo: TypeInfo,
+  options: HoverOptions,
+) {
   if (!typeInfo.directiveDef) {
     return;
   }
   const name = '@' + typeInfo.directiveDef.name;
-  text(into, name);
+  escape(into, name);
 }
 
-function renderArg(into, typeInfo, options) {
+function renderArg(into: string[], typeInfo: TypeInfo, options: HoverOptions) {
   if (typeInfo.directiveDef) {
     renderDirective(into, typeInfo, options);
   } else if (typeInfo.fieldDef) {
@@ -122,25 +141,38 @@ function renderArg(into, typeInfo, options) {
   text(into, ')');
 }
 
-function renderTypeAnnotation(into, typeInfo, options, t) {
+function renderTypeAnnotation(
+  into: string[],
+  typeInfo: TypeInfo,
+  options: HoverOptions,
+  t: null | GraphQLType,
+) {
+  if (!t) return;
   text(into, ': ');
   renderType(into, typeInfo, options, t);
 }
 
-function renderEnumValue(into, typeInfo, options) {
+function renderEnumValue(
+  into: string[],
+  typeInfo: TypeInfo,
+  options: HoverOptions,
+) {
   if (!typeInfo.enumValue) {
     return;
   }
   const name = typeInfo.enumValue.name;
   renderType(into, typeInfo, options, typeInfo.inputType);
   text(into, '.');
-  text(into, name);
+  escape(into, name);
 }
 
-function renderType(into, typeInfo, options, t) {
-  if (!t) {
-    return;
-  }
+function renderType(
+  into: string[],
+  typeInfo: TypeInfo,
+  options: HoverOptions,
+  t: null | GraphQLType,
+) {
+  if (!t) return;
   if (t instanceof GraphQLNonNull) {
     renderType(into, typeInfo, options, t.ofType);
     text(into, '!');
@@ -149,14 +181,12 @@ function renderType(into, typeInfo, options, t) {
     renderType(into, typeInfo, options, t.ofType);
     text(into, ']');
   } else {
-    text(into, t.name);
+    escape(into, t.name);
   }
 }
 
-function renderDescription(into, options, def) {
-  if (!def) {
-    return;
-  }
+function renderDescription(into: string[], options: HoverOptions, def: any) {
+  if (!def) return;
   const description =
     typeof def.description === 'string' ? def.description : null;
   if (description) {
@@ -166,18 +196,18 @@ function renderDescription(into, options, def) {
   renderDeprecation(into, options, def);
 }
 
-function renderDeprecation(into, options, def) {
-  if (!def) {
-    return;
-  }
+function renderDeprecation(into: string[], options: HoverOptions, def: any) {
+  if (!def) return;
   const reason =
     typeof def.deprecationReason === 'string' ? def.deprecationReason : null;
-  if (!reason) {
-    return;
-  }
+  if (!reason) return;
   text(into, '\n\n');
-  text(into, 'Deprecated: ');
+  text(into, '*Deprecated:* ');
   text(into, reason);
+}
+
+function escape(into: string[], content: string) {
+  into.push(content.replace(/([_\*])/g, '\\$1'));
 }
 
 function text(into: string[], content: string) {
